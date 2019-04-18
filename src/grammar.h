@@ -4,6 +4,7 @@
 #include <vector>
 #include <tuple>
 #include <float.h>
+#include <unordered_map>
 using namespace std;
 
 /* inside the first tuple: Rule A -> B C, and the score of it */
@@ -11,7 +12,7 @@ typedef vector<tuple<tuple<string, string, string>, double>> BinaryGrammar;
 /* inside the first tuple: Rule A -> B, and the score of it */
 typedef vector<tuple<tuple<string, string>, double>> UnaryGrammar;
 /* 1d: Word. 2d: Tag. 3d: array of scores of subtags */
-typedef vector<tuple<string, string, vector<double>>> Lexicons;
+typedef unordered_map<string, vector<tuple<string, vector<double>>>> Lexicons;
 /* score array */
 typedef vector<vector<unordered_map<string, double>>> Scores;
 
