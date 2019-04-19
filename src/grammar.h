@@ -24,3 +24,15 @@ UnaryGrammar read_unary_grammar();
 
 /* Read lexicon scores */
 Lexicons read_lexicon();
+
+/* Read input sentences to be parsed */
+vector<vector<string>> read_sentences();
+
+/* Read all grammar symbols into dict form */
+unordered_map<string, double> read_symbols();
+
+struct Ptree {
+  string symbol;
+  Ptree* left;
+  Ptree* right;
+};
