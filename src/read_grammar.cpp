@@ -3,7 +3,7 @@
 
 static string grammarPath = "grammar.grammar";
 static string lexiconPath = "grammar.lexicon";
-static string sentencesPath = "ptb.2-21.short.txt";
+static string sentencesPath = "ptb.22.txt";
 
 vector<string> split(string line) {
   vector<string> res;
@@ -18,12 +18,12 @@ vector<string> split(string line) {
   return res;
 }
 
-BinaryGrammar read_binary_grammar() {
+BinaryGrammar read_binary_grammar(SymToIdx sti) {
   BinaryGrammar result;
   string line;
   vector<string> tmp;
-  tuple<string, string, string> rule;
-  tuple<tuple<string, string, string>, double> completeRule;
+  tuple<int, int, int> rule;
+  tuple<tuple<int, int, int>, double> completeRule;
 
   ifstream grammarfile("grammar.grammar", ios::in);
   if (!grammarfile.is_open()) {
@@ -34,7 +34,7 @@ BinaryGrammar read_binary_grammar() {
     // parse the line and put it into the grammar
     tmp = split(line);
     if (tmp.size() == 5) {
-      rule = make_tuple(tmp[0], tmp[2], tmp[3]);
+      rule = make_tuple(sti[tmp[0]], sti[tmp[2]], sti[tmp[3]]);
       completeRule = make_tuple(rule, log(stod(tmp[4])));
       result.push_back(completeRule);
     }
@@ -42,12 +42,12 @@ BinaryGrammar read_binary_grammar() {
   return result;
 }
 
-UnaryGrammar read_unary_grammar() {
+UnaryGrammar read_unary_grammar(SymToIdx sti) {
   UnaryGrammar result;
   string line;
   vector<string> tmp;
-  tuple<string, string> rule;
-  tuple<tuple<string, string>, double> completeRule;
+  tuple<int, int> rule;
+  tuple<tuple<int, int>, double> completeRule;
 
   ifstream grammarfile(grammarPath);
   if (!grammarfile) {
@@ -59,7 +59,7 @@ UnaryGrammar read_unary_grammar() {
     tmp = split(line);
     if (tmp.size() == 4) {
       if (tmp[0] == tmp[2] && stod(tmp[3]) == 1.0) continue;
-      rule = make_tuple(tmp[0], tmp[2]);
+      rule = make_tuple(sti[tmp[0]], sti[tmp[2]]);
       completeRule = make_tuple(rule, log(stod(tmp[3])));
       result.push_back(completeRule);
     }
@@ -67,7 +67,7 @@ UnaryGrammar read_unary_grammar() {
   return result;
 }
 
-unordered_map<string, vector<tuple<string, vector<double>>>> read_lexicon() {
+unordered_map<string, vector<tuple<string, vector<double>>>> read_lexicon(SymToIdx sti) {
   unordered_map<string, vector<tuple<string, vector<double>>>> result;
   string line;
   vector<string> tmp;
@@ -121,7 +121,7 @@ vector<vector<string>> read_sentences() {
   return sentences;
 }
 
-unordered_map<string, double> read_symbols(){
+int read_symbols(SymToIdx& sti, IdxToSym& its){
   unordered_map<string, double> result;
   vector<string> tmp;
   string line;
@@ -129,8 +129,10 @@ unordered_map<string, double> read_symbols(){
   ifstream grammarfile(grammarPath);
   if (!grammarfile) {
     cout << "Error opening file." << endl;
-    return result;
+    return 0;
   }
+
+  int num_symbol = 0;
   while (getline(grammarfile, line)) {
     // parse the line and put it into the grammar
     tmp = split(line);
@@ -139,19 +141,15 @@ unordered_map<string, double> read_symbols(){
       if (i < 3 || (i == 3 && tmp.size() == 5)) {
         auto it = result.find(tmp[i]);
         if (it == result.end()) {
+          // we have found a brand new symbol
           result.insert(pair<string, double>(tmp[i], -DBL_MAX));
+          // also, update sti and its
+          sti.insert(pair<string, int>(tmp[i], num_symbol));
+          its.insert(pair<int, string>(num_symbol, tmp[i]));
+          num_symbol++;
         }
       }
     }
   }
-  return result;
+  return num_symbol;
 }
-
-/*int main() {
-BinaryGrammar a = read_binary_grammar();
-read_unary_grammar();
-Lexicons l = read_lexicon();
-vector<vector<string>> sentences = read_sentences();
-unordered_map<string, double> symbols = read_symbols();
-return 0;
-}*/
