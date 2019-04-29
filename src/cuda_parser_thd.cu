@@ -1,13 +1,12 @@
 #define NUM_THREADS 1024
+#define TOLERANCE 0.001
 #include <iostream>
 #include <tuple>
 #include <vector>
 #include <ctime>
-
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <driver_functions.h>
-
 #include "cuda_parser.h"
 using namespace std;
 
@@ -118,7 +117,8 @@ Ptree* searchHighest (Scores& scores, int symidx, vector<string> sen,
 		if (symbol == sti[curr->symbol]) {
 			int lsym = get<1>(pair);
 			float prob = get<1>(gr1[i]);
-			if(scores[start][end][symbol] == scores[start][end][lsym] + prob){
+			float diff = scores[start][end][symbol] - scores[start][end][lsym] - prob;
+			if(diff > -TOLERANCE && diff < TOLERANCE){
 				Ptree* child = (Ptree*) malloc(sizeof(Ptree));
 				child->symbol = its[lsym];
 				root->left = child;
@@ -140,7 +140,8 @@ Ptree* searchHighest (Scores& scores, int symidx, vector<string> sen,
 			int rsym = get<2>(pair);
 			float rscore= get<1>(gr2[j]);
 			for(int split = start+1; split <= end-1; split++) {
-				if(scores[start][end][symbol] == scores[start][split][lsym]+scores[split][end][rsym]+rscore){
+				float diff = scores[start][end][symbol] - scores[start][split][lsym] - scores[split][end][rsym] - rscore;
+				if(diff > -TOLERANCE && diff < TOLERANCE){
 					curr->left = searchHighest(scores, lsym, sen, start, split, gr2, gr1, sti, its);
 					curr->right = searchHighest(scores, rsym, sen, split, end, gr2, gr1, sti, its);
 				}
@@ -189,18 +190,27 @@ BG* moveBgToCUDA(BinaryGrammar bg) {
 	cudaFreeHost(grammars);
   return gr;
 }
-/*
-__device__ static float atomicMax(float* address, float val) {
-	int* address_as_i = (int*) address;
-  int old = *address_as_i, assumed;
-  do {
-    assumed = old;
-    old = ::atomicCAS(address_as_i, assumed,
-			__float_as_int(::fmaxf(val, __int_as_float(assumed))));
-  } while (assumed != old);
-  return __int_as_float(old);
+
+UG* moveUgToCUDA(UnaryGrammar ug) {
+  UG* grammars;
+  cudaMallocHost((void**)&grammars, ug.size() * sizeof(UG));
+  for (int i = 0; i < ug.size(); i++) {
+    tuple<int, int> pair = get<0>(ug[i]);
+    int symbol = get<0>(pair);
+		int target = get<1>(pair);
+    float rulescore = get<1>(ug[i]);
+    grammars[i].A = symbol;
+    grammars[i].B = target;
+    grammars[i].score = rulescore;
+  }
+  // allocate CUDA memory
+  UG* gr;
+  cudaMalloc((void**)&gr, ug.size() * sizeof(UG));
+  cudaMemcpy(gr, grammars, ug.size() * sizeof(UG), cudaMemcpyHostToDevice);
+	cudaFreeHost(grammars);
+  return gr;
 }
-*/
+
 __device__ __forceinline__ float atomicMaxFloat (float* addr, float value) {
   float old;
   old = (value >= 0) ? __int_as_float(atomicMax((int*)addr, __float_as_int(value))) :
@@ -208,133 +218,172 @@ __device__ __forceinline__ float atomicMaxFloat (float* addr, float value) {
 	return old;
 }
 
-__global__ static void check_shared_max(float* shared_max, int num_symbol) {
-  for (int i = 0; i < num_symbol; i++) {
-    if (shared_max[i] > -FLT_MAX) {
-      printf("sldfjsdklfjdslkfjdsjldsfj\n");
-      return;
-    }
-  }
-  printf("ALL MINS\n");
-}
-
-__global__ static void check_device_score(float* device_scores, int dim1, int dim2, int dim3) {
-	int ret = 0;
-	for (int i = 0; i < dim1; i++){
-		for (int j = 0; j < dim2; j++) {
-			for (int k = 0; k < dim3; k++) {
-				if(device_scores[k*dim1*dim2 + j*dim1 + i] != -FLT_MAX) {
-					ret++;
-				}
+__global__ static void UnaryRelaxKernel(UG* ug, float* deviceScores, float* shared_max,
+  int rulesize, int dim1, int dim2, int dim3, int start, int end) {
+	int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+	if (threadId < rulesize){
+		int symbol = ug[threadId].A;
+		int lsym = ug[threadId].B;
+		float rulescore = ug[threadId].score;
+		float localMax = -FLT_MAX;
+		float lscore;
+		lscore = deviceScores[lsym*dim1*dim2 + end*dim1 + start];
+		if (lscore > -FLT_MAX) {
+			float total = rulescore + lscore;
+			if (total > localMax) {
+				localMax = total;
 			}
 		}
+		atomicMaxFloat(&shared_max[symbol], localMax);
 	}
-  printf("UNZEROS: %d\n", ret);
-}
-
-__device__ static void check_score(float* device_scores, int dim1, int dim2, int dim3) {
-	int ret = 0;
-	for (int i = 0; i < dim1; i++){
-		for (int j = 0; j < dim2; j++) {
-			for (int k = 0; k < dim3; k++) {
-				if(device_scores[k*dim1*dim2 + j*dim1 + i] != -FLT_MAX) {
-					ret++;
-				}
-			}
-		}
-	}
-  printf("UNZEROS: %d\n", ret);
 }
 
 __global__ static void BinaryRelaxKernel(BG* bg, float* deviceScores, float* shared_max,
   int rulesize, int dim1, int dim2, int dim3, int start, int end) {
 
 	int threadId = blockIdx.x * blockDim.x + threadIdx.x;
-	int symbol = bg[threadId].A;
-	int lsym = bg[threadId].B;
-	int rsym = bg[threadId].C;
-	float rulescore = bg[threadId].score;
-	// check_score(deviceScores, dim1, dim2, dim3);
-	float localMax = -FLT_MAX;
-  for (int split = start + 1; split <= end - 1; split++) {
-		// [start][split][lsym]
-    float lscore;
-		lscore = deviceScores[lsym*dim1*dim2 + split*dim1 + start];
-		// [split][end][rsym]
-		float rscore;
-		rscore = deviceScores[rsym*dim1*dim2 + end*dim1 + split];
-		float total;
-		total = rulescore + lscore + rscore;
-		if (total > localMax) {
-			printf("fuck your mother\n");
-			localMax = total;
-		}
-  }
-	atomicMaxFloat(&shared_max[symbol], localMax);
+	if (threadId < rulesize){
+		int symbol = bg[threadId].A;
+		int lsym = bg[threadId].B;
+		int rsym = bg[threadId].C;
+		float rulescore = bg[threadId].score;
+		float localMax = -FLT_MAX;
+  	for (int split = start + 1; split <= end - 1; split++) {
+			// [start][split][lsym]
+    	float lscore;
+			lscore = deviceScores[lsym*dim1*dim2 + split*dim1 + start];
+			// [split][end][rsym]
+			float rscore;
+			rscore = deviceScores[rsym*dim1*dim2 + end*dim1 + split];
+			if (lscore > -FLT_MAX && rscore > -FLT_MAX) {
+				float total;
+				total = rulescore + lscore + rscore;
+				if (total > localMax) {
+					localMax = total;
+				}
+			}
+	  }
+		atomicMaxFloat(&shared_max[symbol], localMax);
+	}
 }
 
-void RuleBasedBinaryRelax (Scores& scores, int nWords, int length, BG* bg, int bg_size, int num_symbol) {
-  // Note that bg is already on device
-  // begin of loop body
-  for (int start = 0; start <= nWords - length; start++) {
-		int end = start + length;
+__global__ void update_score(float* score, float*shared_max, int start, int end, int dim1, int dim2, int num_symbol) {
+	for (int i = 0; i < num_symbol; i++) {
+		if (score[i*dim1*dim2 + end*dim1 + start] < shared_max[i]){
+			score[i*dim1*dim2 + end*dim1 + start] = shared_max[i];
+		}
+	}
+}
 
+void RuleBasedUnaryRelax (float* score_arr, int nWords, int length, UG* ug, int ug_size, int num_symbol) {
+	int dim1 = nWords + 1;
+	int dim2 = nWords + 1;
+	for (int start = 0; start <= nWords - length; start++) {
+		int end = start + length;
     // score_arr is on CUDA
-    float* score_arr = moveScoreToCUDA(scores, nWords + 1, nWords + 1, num_symbol);
-		// check_device_score<<<1, 1>>>(score_arr, nWords + 1, nWords + 1, num_symbol);
     float* shared_max = new float[num_symbol];
-    for (int i = 0; i < num_symbol; i++) {
+		for (int i = 0; i < num_symbol; i++) {
       shared_max[i] = -FLT_MAX;
-    }
+		}
     float* shared_max_CUDA;
     cudaMalloc((void**)&shared_max_CUDA, num_symbol * sizeof(float));
-    cudaMemcpy(shared_max_CUDA, shared_max, num_symbol * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(shared_max_CUDA, shared_max, num_symbol * sizeof(float), cudaMemcpyHostToDevice);
+		cudaFree(shared_max);
 
-		for (int i = 0; i < bg_size; i += NUM_THREADS) {
-			if (i + NUM_THREADS < bg_size) {
-				BinaryRelaxKernel<<<1, NUM_THREADS>>>(bg, score_arr, shared_max_CUDA, bg_size,
-		      nWords+1, nWords+1, num_symbol, start, end);
-			}
-			else {
-				BinaryRelaxKernel<<<1, (bg_size - i - 1)>>>(bg, score_arr, shared_max_CUDA, bg_size,
-		      nWords+1, nWords+1, num_symbol, start, end);
-			}
-		}
-    // check_shared_max<<<1, 1>>>(shared_max_CUDA, num_symbol);
+		UnaryRelaxKernel<<<(ug_size+NUM_THREADS)/NUM_THREADS, NUM_THREADS>>>(ug, score_arr, shared_max_CUDA, ug_size,
+			nWords+1, nWords+1, num_symbol, start, end);
+
     // copy back the shared_max array modified by kernel
-    cudaMemcpy(shared_max, shared_max_CUDA, num_symbol * sizeof(float), cudaMemcpyDeviceToHost);
+    // cudaMemcpy(shared_max, shared_max_CUDA, num_symbol * sizeof(float), cudaMemcpyDeviceToHost);
     // update score array
-    for (int i = 0; i < num_symbol; i++) {
-			if (scores[start][end][i] < shared_max[i]){
-				scores[start][end][i] = shared_max[i];
-			}
-    }
+		update_score<<<1,1>>>(score_arr, shared_max_CUDA, start, end, dim1, dim2, num_symbol);
 		cudaFree(shared_max_CUDA);
-		cudaFree(score_arr);
   }
+}
+
+void RuleBasedBinaryRelax (float* score_arr, int nWords, int length, BG* bg, int bg_size, int num_symbol) {
+  // Note that bg is already on device
+  // begin of loop body
+	// TODO: move this for loop to kernel!!!!!!!!!!
+	int dim1 = nWords + 1;
+	int dim2 = nWords + 1;
+  for (int start = 0; start <= nWords - length; start++) {
+		int end = start + length;
+    // score_arr is already CUDA
+		float* shared_max = new float[num_symbol];
+		for (int i = 0; i < num_symbol; i++) {
+      shared_max[i] = -FLT_MAX;
+		}
+    float* shared_max_CUDA;
+    cudaMalloc((void**)&shared_max_CUDA, num_symbol * sizeof(float));
+		cudaMemcpy(shared_max_CUDA, shared_max, num_symbol * sizeof(float), cudaMemcpyHostToDevice);
+		cudaFree(shared_max);
+
+		BinaryRelaxKernel<<<(bg_size+NUM_THREADS)/NUM_THREADS, NUM_THREADS>>>(bg, score_arr, shared_max_CUDA, bg_size,
+			nWords+1, nWords+1, num_symbol, start, end);
+
+    // copy back the shared_max array modified by kernel
+    // cudaMemcpy(shared_max, shared_max_CUDA, num_symbol * sizeof(float), cudaMemcpyDeviceToHost);
+    // update score array
+		update_score<<<1,1>>>(score_arr, shared_max_CUDA, start, end, dim1, dim2, num_symbol);
+		cudaFree(shared_max_CUDA);
+  }
+}
+
+Ptree* parse_sequential(vector<string> sen, unordered_map<string, vector<tuple<string, vector<float>>>> lex,
+			 BinaryGrammar bg, UnaryGrammar ug, int num_symbol, SymToIdx sti, IdxToSym its) {
+	int nWords = (int)sen.size();
+	Scores scores = initScores(nWords, num_symbol);
+	Occured occured(nWords, vector<bool>(num_symbol, 0));
+	lexiconScores(scores, sen, nWords, lex, sti, its, occured);
+	for(int spanlen = 2; spanlen <= nWords; spanlen++) {
+		binaryRelax(scores, nWords, spanlen, bg, occured);
+		unaryRelax(scores, nWords, spanlen, ug, occured);
+	}
+	Ptree* result = searchHighest(scores, -1, sen, 0, nWords, bg, ug, sti, its);
+	return result;
 }
 
 Ptree* parse(vector<string> sen, unordered_map<string, vector<tuple<string, vector<float>>>> lex,
 			 BinaryGrammar bg, UnaryGrammar ug, int num_symbol, SymToIdx sti, IdxToSym its) {
+
 	int nWords = (int)sen.size();
-	//std::cout << "total words: " << nWords << " \n";
 	Scores scores = initScores(nWords, num_symbol);
 	Occured occured(nWords, vector<bool>(num_symbol, 0));
 	lexiconScores(scores, sen, nWords, lex, sti, its, occured);
   // copy grammar to device
   int bg_size = bg.size();
-  BG* gr = moveBgToCUDA(bg);
+	int ug_size = ug.size();
+
+  BG* gr1 = moveBgToCUDA(bg);
+	UG* gr2 = moveUgToCUDA(ug);
+	float* score_arr = moveScoreToCUDA(scores, nWords + 1, nWords + 1, num_symbol);
+
 	for(int spanlen = 2; spanlen <= nWords; spanlen++) {
-		RuleBasedBinaryRelax(scores, nWords, spanlen, gr, bg_size, num_symbol);
-    // TODO: ALSO IMPLEMENT CUDA VERSION OF UNARYRELAX
-    // THIS WILL REDUCE THE AMOUNT OF MEMORY COPY DRAMATICALLY
-    // AND ALL THE WORK COULD BE DONE ON CUDA DEVICE
-		unaryRelax(scores, nWords, spanlen, ug, occured);
+		RuleBasedBinaryRelax(score_arr, nWords, spanlen, gr1, bg_size, num_symbol);
+		RuleBasedUnaryRelax(score_arr, nWords, spanlen, gr2, ug_size, num_symbol);
 	}
-	cudaFree(gr);
+
+
+	int dim1 = nWords + 1;
+	int dim2 = nWords + 1;
+	int dim3 = num_symbol;
+	int total = dim1*dim2*dim3;
+	float* hostScore;
+	cudaMallocHost((void**)&hostScore, total * sizeof(float));
+	cudaMemcpy(hostScore, score_arr, total * sizeof(float), cudaMemcpyDeviceToHost);
+	for (int i = 0; i < dim1; i++){
+		for (int j = 0; j < dim2; j++) {
+			for (int k = 0; k < dim3; k++) {
+				scores[i][j][k] = hostScore[k*dim1*dim2 + j*dim1 + i];
+			}
+		}
+	}
+	cudaFree(gr1);
+	cudaFree(gr2);
+	cudaFree(hostScore);
+	cudaFree(score_arr);
+
 	Ptree* result = searchHighest(scores, -1, sen, 0, nWords, bg, ug, sti, its);
-	std::cout << "Root symbol: " << result->symbol << "s\n";
-	// std::cout << "Left child symbol: " << result->left->symbol << "s\n";
-	// std::cout << "Right child symbol: " << result->right->symbol << "s\n";
 	return result;
 }

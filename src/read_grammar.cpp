@@ -3,7 +3,7 @@
 
 static string grammarPath = "grammar.grammar";
 static string lexiconPath = "grammar.lexicon";
-static string sentencesPath = "ptb.2-21.short.txt";
+static string sentencesPath = "ptb.2-21.txt";
 
 vector<string> split(string line) {
   vector<string> res;
@@ -11,8 +11,10 @@ vector<string> split(string line) {
   for (int i = 0; i <= line.length(); i++){
     if (line[i] == ' ' || i == line.length()) {
       int len = i - idx;
-      res.push_back(line.substr(idx, len));
-      idx = i + 1;
+			if(len > 0) {
+				res.push_back(line.substr(idx, len));
+	      idx = i + 1;
+			}
     }
   }
   return res;

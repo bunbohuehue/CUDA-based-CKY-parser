@@ -32,11 +32,11 @@ int main(){
 	int num_sen = 40;
 	for (int i = 0; i < ub; i++){
 		int len = (int)sentences[i].size();
-		if (len <= 30 && num < num_sen) {
+		if (num < num_sen) {
 			num += 1;
 			total += len;
 			parse(sentences[i], lexicons, bg, ug, num_symbol, sti, its);
-			cout << "Finished parsing sentence " << num << endl;
+			cout << "Finished parsing sentence (CUDA) " << num << endl;
 		}
 	}
 	std::cout << "avg len: " << total/num_sen << " \n";
@@ -44,6 +44,26 @@ int main(){
 
 	elapsed_seconds = end-start;
 	end_time = std::chrono::system_clock::to_time_t(end);
-	std::cout << "Total parsing time: " << elapsed_seconds.count() << "s\n";
-	std::cout << "Average time per sentence: " << elapsed_seconds.count()/num_sen << endl;
+	std::cout << "Total parsing time (on CUDA): " << elapsed_seconds.count() << "s\n";
+	std::cout << "Average time per sentence (on CUDA): " << elapsed_seconds.count()/num_sen << endl;
+
+	start = std::chrono::system_clock::now();
+	total = 0;
+	num = 0;
+	for (int i = 0; i < ub; i++){
+		int len = (int)sentences[i].size();
+		if (num < num_sen) {
+			num += 1;
+			total += len;
+			parse_sequential(sentences[i], lexicons, bg, ug, num_symbol, sti, its);
+			cout << "Finished parsing sentence (CPU) " << num << endl;
+		}
+	}
+	std::cout << "avg len: " << total/num_sen << " \n";
+	end = std::chrono::system_clock::now();
+
+	elapsed_seconds = end-start;
+	end_time = std::chrono::system_clock::to_time_t(end);
+	std::cout << "Total parsing time (on CPU): " << elapsed_seconds.count() << "s\n";
+	std::cout << "Average time per sentence (on CPU): " << elapsed_seconds.count()/num_sen << endl;
 }
