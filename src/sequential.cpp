@@ -6,20 +6,20 @@
 using namespace std;
 
 Scores initScores (int nWords, int num_symbol) {
-	Scores scores(nWords + 1, vector<vector<double>>(nWords + 1, vector<double>(num_symbol, -DBL_MAX)));
+	Scores scores(nWords + 1, vector<vector<>>(nWords + 1, vector<>(num_symbol, -DBL_MAX)));
 	return scores;
 }
 
 void lexiconScores (Scores& scores, vector<string> sen, int nWords, unordered_map<string,
-					vector<tuple<string, vector<double>>>> lex, SymToIdx sti, IdxToSym its, Occured& occured) {
+					vector<tuple<string, vector<float>>>> lex, SymToIdx sti, IdxToSym its, Occured& occured) {
 	for(int start = 0; start < nWords; start++) {
 		string word = sen[start];
-		vector<tuple<string, vector<double>>> rules = lex[word];
+		vector<tuple<string, vector<float>>> rules = lex[word];
 		for(int i = 0; i < rules.size(); i++) {
 			// Extract information from grammar rules
-			tuple<string, vector<double>> pair = rules[i];
+			tuple<string, vector<float>> pair = rules[i];
 			string tag = get<0>(pair);
-			vector<double> probs = get<1>(pair);
+			vector<float> probs = get<1>(pair);
 			for(int j = 0; j < probs.size(); j++) {
 				string subtag = tag + '_' + to_string(j);
 				int tagidx = sti[subtag];
@@ -38,17 +38,17 @@ void binaryRelax (Scores& scores, int nWords,
 		int symbol = get<0>(pair);
 		int lsym = get<1>(pair);
 		int rsym = get<2>(pair);
-		double rulescore = get<1>(gr[i]);
+		float rulescore = get<1>(gr[i]);
 		for(int split = 1; split < length; split++) {
 			if (occured[split-1][lsym] && occured[length-split-1][rsym]){
 				for(int start = 0; start <= nWords-length; start++) {
 					int end = start + length;
-					double lscore = scores[start][start+split][lsym];
+					float lscore = scores[start][start+split][lsym];
 					if (lscore > -DBL_MAX) {
-						double rscore = scores[start+split][end][rsym];
+						float rscore = scores[start+split][end][rsym];
 						if (rscore > -DBL_MAX) {
-							double current = scores[start][end][symbol];
-							double total = rulescore + lscore + rscore;
+							float current = scores[start][end][symbol];
+							float total = rulescore + lscore + rscore;
 							if (total > current) {
 								scores[start][end][symbol] = total;
 								occured[length-1][symbol] = 1;
@@ -69,12 +69,12 @@ void unaryRelax (Scores& scores, int nWords,
 		int symbol = get<0>(pair);
 		int lsym = get<1>(pair);
 		if (occured[length-1][lsym]) {
-			double rulescore = get<1>(gr[i]);
+			float rulescore = get<1>(gr[i]);
 			for(int start = 0; start <= nWords-length; start++) {
 				int end = start + length;
-				double current = scores[start][end][symbol];
+				float current = scores[start][end][symbol];
 				if(scores[start][end][lsym] > -DBL_MAX) {
-					double total = rulescore + scores[start][end][lsym];
+					float total = rulescore + scores[start][end][lsym];
 					if (total > current) {
 						scores[start][end][symbol] = total;
 						occured[length-1][symbol] = 1;
@@ -89,7 +89,7 @@ Ptree* searchHighest (Scores& scores, int symidx, vector<string> sen,
 					  int start, int end, BinaryGrammar gr2, UnaryGrammar gr1, SymToIdx sti, IdxToSym its){
 	Ptree* root = (Ptree*) malloc(sizeof(Ptree));
 	if (symidx == -1) {
-		double max = -DBL_MAX;
+		float max = -DBL_MAX;
 		int current = 0;
 		for (int i = 0; i < scores[0][end].size(); i++) {
 			if (scores[0][end][i] > max) {
@@ -107,7 +107,7 @@ Ptree* searchHighest (Scores& scores, int symidx, vector<string> sen,
 		int symbol = get<0>(pair);
 		if (symbol == sti[curr->symbol]) {
 			int lsym = get<1>(pair);
-			double prob = get<1>(gr1[i]);
+			float prob = get<1>(gr1[i]);
 			if(scores[start][end][symbol] == scores[start][end][lsym] + prob){
 				Ptree* child = (Ptree*) malloc(sizeof(Ptree));
 				child->symbol = its[lsym];
@@ -128,7 +128,7 @@ Ptree* searchHighest (Scores& scores, int symidx, vector<string> sen,
 		if (symbol == sti[curr->symbol]) {
 			int lsym = get<1>(pair);
 			int rsym = get<2>(pair);
-			double rscore= get<1>(gr2[j]);
+			float rscore= get<1>(gr2[j]);
 			for(int split = start+1; split <= end-1; split++) {
 				if(scores[start][end][symbol] == scores[start][split][lsym]+scores[split][end][rsym]+rscore){
 					curr->left = searchHighest(scores, lsym, sen, start, split, gr2, gr1, sti, its);
@@ -140,7 +140,7 @@ Ptree* searchHighest (Scores& scores, int symidx, vector<string> sen,
 	return root;
 }
 
-Ptree* parse(vector<string> sen, unordered_map<string, vector<tuple<string, vector<double>>>> lex,
+Ptree* parse(vector<string> sen, unordered_map<string, vector<tuple<string, vector<float>>>> lex,
 			 BinaryGrammar bg, UnaryGrammar ug, int num_symbol, SymToIdx sti, IdxToSym its) {
 	int nWords = (int)sen.size();
 	//std::cout << "total words: " << nWords << " \n";
@@ -160,10 +160,11 @@ int main(){
 
 	SymToIdx sti;
 	IdxToSym its;
-	int num_symbol = read_symbols(sti, its);
+	Symbols syms;
+	int num_symbol = read_symbols(sti, its, syms);
 	BinaryGrammar bg = read_binary_grammar(sti);
 	UnaryGrammar ug = read_unary_grammar(sti);
-	unordered_map<string, vector<tuple<string, vector<double>>>> lexicons = read_lexicon(sti);
+	unordered_map<string, vector<tuple<string, vector<>>>> lexicons = read_lexicon(sti);
 	vector<vector<string>> sentences = read_sentences();
 	auto end = std::chrono::system_clock::now();
 

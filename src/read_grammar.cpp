@@ -3,7 +3,7 @@
 
 static string grammarPath = "grammar.grammar";
 static string lexiconPath = "grammar.lexicon";
-static string sentencesPath = "ptb.22.txt";
+static string sentencesPath = "ptb.2-21.short.txt";
 
 vector<string> split(string line) {
   vector<string> res;
@@ -23,7 +23,7 @@ BinaryGrammar read_binary_grammar(SymToIdx sti) {
   string line;
   vector<string> tmp;
   tuple<int, int, int> rule;
-  tuple<tuple<int, int, int>, double> completeRule;
+  tuple<tuple<int, int, int>, float> completeRule;
 
   ifstream grammarfile("grammar.grammar", ios::in);
   if (!grammarfile.is_open()) {
@@ -47,7 +47,7 @@ UnaryGrammar read_unary_grammar(SymToIdx sti) {
   string line;
   vector<string> tmp;
   tuple<int, int> rule;
-  tuple<tuple<int, int>, double> completeRule;
+  tuple<tuple<int, int>, float> completeRule;
 
   ifstream grammarfile(grammarPath);
   if (!grammarfile) {
@@ -67,12 +67,12 @@ UnaryGrammar read_unary_grammar(SymToIdx sti) {
   return result;
 }
 
-unordered_map<string, vector<tuple<string, vector<double>>>> read_lexicon(SymToIdx sti) {
-  unordered_map<string, vector<tuple<string, vector<double>>>> result;
+unordered_map<string, vector<tuple<string, vector<float>>>> read_lexicon(SymToIdx sti) {
+  unordered_map<string, vector<tuple<string, vector<float>>>> result;
   string line;
   vector<string> tmp;
-  vector<double> scores;
-  tuple<string, vector<double>> tag;
+  vector<float> scores;
+  tuple<string, vector<float>> tag;
 
   ifstream grammarfile(lexiconPath);
   if (!grammarfile) {
@@ -92,9 +92,9 @@ unordered_map<string, vector<tuple<string, vector<double>>>> read_lexicon(SymToI
     auto it = result.find(tmp[1]);
     if (it == result.end()) {
       // key is not there
-      vector<tuple<string, vector<double>>> lexicon;
+      vector<tuple<string, vector<float>>> lexicon;
       lexicon.push_back(tag);
-      result.insert(pair<string, vector<tuple<string, vector<double>>>>(tmp[1], lexicon));
+      result.insert(pair<string, vector<tuple<string, vector<float>>>>(tmp[1], lexicon));
     }
     else {
       it->second.push_back(tag);
@@ -122,7 +122,7 @@ vector<vector<string>> read_sentences() {
 }
 
 int read_symbols(SymToIdx& sti, IdxToSym& its){
-  unordered_map<string, double> result;
+  unordered_map<string, float> result;
   vector<string> tmp;
   string line;
 
@@ -142,7 +142,7 @@ int read_symbols(SymToIdx& sti, IdxToSym& its){
         auto it = result.find(tmp[i]);
         if (it == result.end()) {
           // we have found a brand new symbol
-          result.insert(pair<string, double>(tmp[i], -DBL_MAX));
+          result.insert(pair<string, float>(tmp[i], -DBL_MAX));
           // also, update sti and its
           sti.insert(pair<string, int>(tmp[i], num_symbol));
           its.insert(pair<int, string>(num_symbol, tmp[i]));

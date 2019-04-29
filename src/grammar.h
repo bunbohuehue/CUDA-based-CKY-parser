@@ -1,3 +1,6 @@
+#ifndef GRAMMAR_H
+#define GRAMMAR_H
+
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -8,18 +11,19 @@
 using namespace std;
 
 /* inside the first tuple: Rule A -> B C, and the score of it */
-typedef vector<tuple<tuple<int, int, int>, double>> BinaryGrammar;
+typedef vector<tuple<tuple<int, int, int>, float>> BinaryGrammar;
 /* inside the first tuple: Rule A -> B, and the score of it */
-typedef vector<tuple<tuple<int, int>, double>> UnaryGrammar;
+typedef vector<tuple<tuple<int, int>, float>> UnaryGrammar;
 /* 1d: Word. 2d: Tag. 3d: array of scores of subtags */
-typedef unordered_map<string, vector<tuple<string, vector<double>>>> Lexicons;
+typedef unordered_map<string, vector<tuple<string, vector<float>>>> Lexicons;
 /* score array */
-typedef vector<vector<vector<double>>> Scores;
+typedef vector<vector<vector<float>>> Scores;
 typedef vector<vector<bool>> Occured;
 
 /* for index <=> symbol conversion */
 typedef unordered_map<string, int> SymToIdx;
 typedef unordered_map<int, string> IdxToSym;
+typedef vector<string> Symbols;
 
 /* Read binary grammars */
 BinaryGrammar read_binary_grammar(SymToIdx sti);
@@ -41,3 +45,5 @@ struct Ptree {
   Ptree* left;
   Ptree* right;
 };
+
+#endif
