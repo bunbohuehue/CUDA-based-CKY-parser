@@ -164,7 +164,7 @@ int main(){
 	int num_symbol = read_symbols(sti, its, syms);
 	BinaryGrammar bg = read_binary_grammar(sti);
 	UnaryGrammar ug = read_unary_grammar(sti);
-	unordered_map<string, vector<tuple<string, vector<>>>> lexicons = read_lexicon(sti);
+	unordered_map<string, vector<tuple<string, vector<float>>>> lexicons = read_lexicon(sti);
 	vector<vector<string>> sentences = read_sentences();
 	auto end = std::chrono::system_clock::now();
 

@@ -1,6 +1,6 @@
 EXECUTABLE := cuda_parser
 LDFLAGS=-L/usr/local/depot/cuda-8.0/lib64/ -lcudart
-CU_FILES   := cuda_parser_thd.cu
+CU_FILES   := cuda_parser_thd.cu cuda_parser_block.cu cuda_search.cu utils.cu
 CU_DEPS    :=
 CC_FILES   := main.cpp read_grammar.cpp
 LOGS	   := logs
@@ -26,7 +26,8 @@ LDFRAMEWORKS := $(addprefix -framework , $(FRAMEWORKS))
 
 NVCC=nvcc
 
-OBJS=$(OBJDIR)/main.o $(OBJDIR)/read_grammar.o $(OBJDIR)/cuda_parser_thd.o
+OBJS=$(OBJDIR)/main.o $(OBJDIR)/read_grammar.o $(OBJDIR)/cuda_parser_thd.o \
+		 $(OBJDIR)/cuda_parser_block.o $(OBJDIR)/cuda_search.o $(OBJDIR)/utils.o 
 
 .PHONY: dirs clean
 

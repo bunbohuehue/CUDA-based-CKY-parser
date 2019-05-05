@@ -11,10 +11,11 @@ vector<string> split(string line) {
   for (int i = 0; i <= line.length(); i++){
     if (line[i] == ' ' || i == line.length()) {
       int len = i - idx;
-      if(len > 0) {
+      if (len >0) {
         res.push_back(line.substr(idx, len));
         idx = i + 1;
       }
+
     }
   }
   return res;
@@ -25,7 +26,7 @@ BinaryGrammar read_binary_grammar(SymToIdx sti, BinaryGrammar_SYM& bg) {
   string line;
   vector<string> tmp;
   tuple<int, int, int> rule;
-  tuple<tuple<int, int, int>, float> completeRule;
+  tuple<tuple<int, int, int>, double> completeRule;
 
   ifstream grammarfile("grammar.grammar", ios::in);
   if (!grammarfile.is_open()) {
@@ -60,7 +61,7 @@ UnaryGrammar read_unary_grammar(SymToIdx sti, UnaryGrammar_SYM& ug) {
   string line;
   vector<string> tmp;
   tuple<int, int> rule;
-  tuple<tuple<int, int>, float> completeRule;
+  tuple<tuple<int, int>, double> completeRule;
 
   ifstream grammarfile(grammarPath);
   if (!grammarfile) {
@@ -146,7 +147,7 @@ vector<vector<string>> read_sentences() {
 }
 
 int read_symbols(SymToIdx& sti, IdxToSym& its){
-  unordered_map<string, float> result;
+  unordered_map<string, double> result;
   vector<string> tmp;
   string line;
 
@@ -166,7 +167,7 @@ int read_symbols(SymToIdx& sti, IdxToSym& its){
         auto it = result.find(tmp[i]);
         if (it == result.end()) {
           // we have found a brand new symbol
-          result.insert(pair<string, float>(tmp[i], -DBL_MAX));
+          result.insert(pair<string, double>(tmp[i], -DBL_MAX));
           // also, update sti and its
           sti.insert(pair<string, int>(tmp[i], num_symbol));
           its.insert(pair<int, string>(num_symbol, tmp[i]));
@@ -178,57 +179,68 @@ int read_symbols(SymToIdx& sti, IdxToSym& its){
   return num_symbol;
 }
 
-int generate_sym_to_rules_b(BinaryGrammar_SYM bg, int** rule_arr, float** score_arr, int** lens, int** syms) {
+int generate_sym_to_rules_b(BinaryGrammar_SYM bg, int*& rule_arr, float*& score_arr, int*& lens, int*& syms) {
   int num_blocks = 0;
   for (auto it : bg) {
     num_blocks += (it.second.size() /1024) + 1;
   }
-  *rule_arr = (int*) malloc(num_blocks * 1024 * 2 * sizeof(int));
-  *score_arr = (float*) malloc(num_blocks * 1024 * sizeof(float));
-  *lens = (int*) malloc(num_blocks * sizeof(int));
-  *syms = (int*) malloc(num_blocks * sizeof(int));
+  rule_arr = (int*) malloc(num_blocks * 1024 * 2 * sizeof(int));
+  score_arr = (float*) malloc(num_blocks * 1024 * sizeof(float));
+  lens = (int*) malloc(num_blocks * sizeof(int));
+  syms = (int*) malloc(num_blocks * sizeof(int));
 
+  int idx = 0;
   for (auto it : bg) {
     int symbol = it.first;
     vector<tuple<int, int, float>> rules = it.second;
-    int num_rows = (rules.size() / 1024) + 1;
+    int rule_size = int(rules.size());
+    int num_rows = (rule_size / 1024) + 1;
     for (int i = 0; i < num_rows; i++) {
-      *syms[i] = symbol;
-      *lens[i] = (rules.size() - (i + 1) * 1024) >= 0 ? 1024 : (rules.size() - i * 1024);
-      for (int j = 0; j < *lens[i]; j++) {
+      syms[i + idx] = symbol;
+      if ((rule_size - (i + 1) * 1024) >= 0) {
+        lens[i + idx] = 1024;
+      }
+      else {
+        lens[i + idx] = (rule_size - i * 1024);
+      }
+      for (int j = 0; j < lens[i + idx]; j++) {
         tuple<int, int, float> t = rules[i * 1024 + j];
-        *rule_arr[i * 2048 + 2 * j] = get<0>(t);
-        *rule_arr[i * 2048 + 2 * j + 1] = get<1>(t);
-        *score_arr[i * 1024 + j] = get<2>(t);
+        rule_arr[(i + idx) * 2048 + 2 * j] = get<0>(t);
+        rule_arr[(i + idx) * 2048 + 2 * j + 1] = get<1>(t);
+        score_arr[(i + idx) * 1024 + j] = get<2>(t);
       }
     }
+    idx += num_rows;
   }
   return num_blocks;
 }
 
-int generate_sym_to_rules_u(UnaryGrammar_SYM ug, int** rule_arr, float** score_arr, int** lens, int** syms) {
+int generate_sym_to_rules_u(UnaryGrammar_SYM ug, int*& rule_arr, float*& score_arr, int*& lens, int*& syms) {
   int num_blocks = 0;
   for (auto it : ug) {
     num_blocks += (it.second.size() /1024) + 1;
   }
-  *rule_arr = (int*) malloc(num_blocks * 1024 * sizeof(int));
-  *score_arr = (float*) malloc(num_blocks * 1024 * sizeof(float));
-  *lens = (int*) malloc(num_blocks * sizeof(int));
-  *syms = (int*) malloc(num_blocks * sizeof(int));
+  rule_arr = (int*) malloc(num_blocks * 1024 * sizeof(int));
+  score_arr = (float*) malloc(num_blocks * 1024 * sizeof(float));
+  lens = (int*) malloc(num_blocks * sizeof(int));
+  syms = (int*) malloc(num_blocks * sizeof(int));
 
+  int idx = 0;
   for (auto it : ug) {
     int symbol = it.first;
     vector<tuple<int, float>> rules = it.second;
-    int num_rows = (rules.size() / 1024) + 1;
+    int rule_size = int(rules.size());
+    int num_rows = (rule_size / 1024) + 1;
     for (int i = 0; i < num_rows; i++) {
-      *syms[i] = symbol;
-      *lens[i] = (rules.size() - (i + 1) * 1024) >= 0 ? 1024 : (rules.size() - i * 1024);
-      for (int j = 0; j < *lens[i]; j++) {
+      syms[i + idx] = symbol;
+      lens[i + idx] = (rule_size - (i + 1) * 1024) >= 0 ? 1024 : (rule_size - i * 1024);
+      for (int j = 0; j < lens[i + idx]; j++) {
         tuple<int, float> t = rules[i * 1024 + j];
-        *rule_arr[i * 1024 + j] = get<0>(t);
-        *score_arr[i * 1024 + j] = get<1>(t);
+        rule_arr[(i + idx) * 1024 + j] = get<0>(t);
+        score_arr[(i + idx) * 1024 + j] = get<1>(t);
       }
     }
+    idx += num_rows;
   }
   return num_blocks;
 }
