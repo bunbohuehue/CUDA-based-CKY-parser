@@ -19,7 +19,13 @@ typedef struct {
 Ptree* parse_sequential(vector<string> sen, unordered_map<string, vector<tuple<string, vector<float>>>> lex,
        BinaryGrammar bg, UnaryGrammar ug, int num_symbol, SymToIdx sti, IdxToSym its);
 
-Ptree* parse(vector<string> sen, unordered_map<string, vector<tuple<string, vector<float>>>> lex,
+Ptree* RuleBasedParse(vector<string> sen, unordered_map<string, vector<tuple<string, vector<float>>>> lex,
        BinaryGrammar bg, UnaryGrammar ug, int num_symbol, SymToIdx sti, IdxToSym its);
+
+void parseAllRuleBased (vector<vector<string>> sen, unordered_map<string, vector<tuple<string, vector<float>>>> lex,
+		 BinaryGrammar bg, UnaryGrammar ug, int num_symbol, SymToIdx sti, IdxToSym its, int num_sen);
+
+void parseAllBlockBased (vector<vector<string>> sen, unordered_map<string, vector<tuple<string, vector<float>>>> lex,
+		 BinaryGrammar bg, UnaryGrammar ug, int num_symbol, SymToIdx sti, IdxToSym its, int num_sen);
 
 #endif
