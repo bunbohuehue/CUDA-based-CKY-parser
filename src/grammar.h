@@ -23,6 +23,7 @@ typedef vector<vector<bool>> Occured;
 /* for index <=> symbol conversion */
 typedef unordered_map<string, int> SymToIdx;
 typedef unordered_map<int, string> IdxToSym;
+typedef unordered_map<string, int> WordToIdx;
 typedef vector<string> Symbols;
 
 typedef unordered_map<int, vector<tuple<int, int, float>>> BinaryGrammar_SYM;
@@ -35,7 +36,7 @@ BinaryGrammar read_binary_grammar(SymToIdx sti, BinaryGrammar_SYM& bg);
 UnaryGrammar read_unary_grammar(SymToIdx sti, UnaryGrammar_SYM& ug);
 
 /* Read lexicon scores */
-unordered_map<string, vector<tuple<string, vector<float>>>> read_lexicon(SymToIdx sti);
+unordered_map<string, vector<tuple<string, vector<float>>>> read_lexicon(SymToIdx sti, WordToIdx& wti);
 
 /* Read input sentences to be parsed */
 vector<vector<string>> read_sentences();

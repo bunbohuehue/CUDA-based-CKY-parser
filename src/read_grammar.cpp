@@ -92,7 +92,7 @@ UnaryGrammar read_unary_grammar(SymToIdx sti, UnaryGrammar_SYM& ug) {
   return result;
 }
 
-unordered_map<string, vector<tuple<string, vector<float>>>> read_lexicon(SymToIdx sti) {
+unordered_map<string, vector<tuple<string, vector<float>>>> read_lexicon(SymToIdx sti, WordToIdx& wti) {
   unordered_map<string, vector<tuple<string, vector<float>>>> result;
   string line;
   vector<string> tmp;
@@ -104,6 +104,7 @@ unordered_map<string, vector<tuple<string, vector<float>>>> read_lexicon(SymToId
     cout << "Error opening file." << endl;
     return result;
   }
+	int numW = 0;
   while (getline(grammarfile, line)) {
     // parse the line and put it into the grammar
     tmp = split(line);
@@ -120,6 +121,8 @@ unordered_map<string, vector<tuple<string, vector<float>>>> read_lexicon(SymToId
       vector<tuple<string, vector<float>>> lexicon;
       lexicon.push_back(tag);
       result.insert(pair<string, vector<tuple<string, vector<float>>>>(tmp[1], lexicon));
+			wti.insert(pair<string, int>(tmp[1], numW));
+			numW ++;
     }
     else {
       it->second.push_back(tag);
@@ -182,7 +185,10 @@ int read_symbols(SymToIdx& sti, IdxToSym& its){
 int generate_sym_to_rules_b(BinaryGrammar_SYM bg, int*& rule_arr, float*& score_arr, int*& lens, int*& syms) {
   int num_blocks = 0;
   for (auto it : bg) {
-    num_blocks += (it.second.size() /1024) + 1;
+    if (it.second.size() % 1024 != 0)
+      num_blocks += (it.second.size() / 1024) + 1;
+    else
+      num_blocks += (it.second.size() / 1024);
   }
   rule_arr = (int*) malloc(num_blocks * 1024 * 2 * sizeof(int));
   score_arr = (float*) malloc(num_blocks * 1024 * sizeof(float));
@@ -194,7 +200,11 @@ int generate_sym_to_rules_b(BinaryGrammar_SYM bg, int*& rule_arr, float*& score_
     int symbol = it.first;
     vector<tuple<int, int, float>> rules = it.second;
     int rule_size = int(rules.size());
-    int num_rows = (rule_size / 1024) + 1;
+    int num_rows;
+    if (rule_size % 1024 != 0)
+      num_rows = (rule_size / 1024) + 1;
+    else
+      num_rows = (rule_size / 1024);
     for (int i = 0; i < num_rows; i++) {
       syms[i + idx] = symbol;
       if ((rule_size - (i + 1) * 1024) >= 0) {
@@ -218,7 +228,10 @@ int generate_sym_to_rules_b(BinaryGrammar_SYM bg, int*& rule_arr, float*& score_
 int generate_sym_to_rules_u(UnaryGrammar_SYM ug, int*& rule_arr, float*& score_arr, int*& lens, int*& syms) {
   int num_blocks = 0;
   for (auto it : ug) {
-    num_blocks += (it.second.size() /1024) + 1;
+    if (it.second.size() % 1024 != 0)
+      num_blocks += (it.second.size() / 1024) + 1;
+    else
+      num_blocks += (it.second.size() / 1024);
   }
   rule_arr = (int*) malloc(num_blocks * 1024 * sizeof(int));
   score_arr = (float*) malloc(num_blocks * 1024 * sizeof(float));
@@ -230,7 +243,11 @@ int generate_sym_to_rules_u(UnaryGrammar_SYM ug, int*& rule_arr, float*& score_a
     int symbol = it.first;
     vector<tuple<int, float>> rules = it.second;
     int rule_size = int(rules.size());
-    int num_rows = (rule_size / 1024) + 1;
+    int num_rows;
+    if (rule_size % 1024 != 0)
+      num_rows = (rule_size / 1024) + 1;
+    else
+      num_rows = (rule_size / 1024);
     for (int i = 0; i < num_rows; i++) {
       syms[i + idx] = symbol;
       lens[i + idx] = (rule_size - (i + 1) * 1024) >= 0 ? 1024 : (rule_size - i * 1024);

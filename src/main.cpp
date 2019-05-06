@@ -13,12 +13,13 @@ int main(){
 	SymToIdx sti;
 	IdxToSym its;
   Symbols syms;
+	WordToIdx wti;
 	int num_symbol = read_symbols(sti, its);
 	BinaryGrammar_SYM bg_s;
 	UnaryGrammar_SYM ug_s;
 	BinaryGrammar bg = read_binary_grammar(sti, bg_s);
 	UnaryGrammar ug = read_unary_grammar(sti, ug_s);
-	unordered_map<string, vector<tuple<string, vector<float>>>> lexicons = read_lexicon(sti);
+	unordered_map<string, vector<tuple<string, vector<float>>>> lexicons = read_lexicon(sti, wti);
 	vector<vector<string>> sentences = read_sentences();
 	int* gr_b;
   int* gr_u;
@@ -38,26 +39,15 @@ int main(){
 
 	/* preprocessing done. Now need to start CUDA kernel */
 	int num_sen = 40;
-	// start = std::chrono::system_clock::now();
-	// num_sen  = 40;
-	// parseAllRuleBased(sentences, lexicons, bg, ug, num_symbol, sti, its, num_sen);
-	// end = std::chrono::system_clock::now();
-	//
-	// elapsed_seconds = end-start;
-	// end_time = std::chrono::system_clock::to_time_t(end);
-	// std::cout << "Total parsing time (on CUDA, thread-based): " << elapsed_seconds.count() << "s\n";
-	// std::cout << "Average time per sentence (on CUDA, thread-based: " << elapsed_seconds.count()/num_sen << endl;
-
 	start = std::chrono::system_clock::now();
-	num_sen  = 40;
-	parseAllBlockBased(sentences, lexicons, bg, ug, num_symbol, sti, its, num_sen,
-	num_blocks_b, num_blocks_u, gr_b, gr_u, lens_b, lens_u, syms_b, syms_u, score_b, score_u);
+	num_sen = 40;
+	parseAllRuleBased(sentences, lexicons, bg, ug, num_symbol, sti, its, num_sen, wti);
 	end = std::chrono::system_clock::now();
 
 	elapsed_seconds = end-start;
 	end_time = std::chrono::system_clock::to_time_t(end);
-	std::cout << "Total parsing time (on CUDA, block-based): " << elapsed_seconds.count() << "s\n";
-	std::cout << "Average time per sentence (on CUDA, block-based): " << elapsed_seconds.count()/num_sen << endl;
+	std::cout << "Total parsing time (on CUDA, thread-based): " << elapsed_seconds.count() << "s\n";
+	std::cout << "Average time per sentence (on CUDA, thread-based): " << elapsed_seconds.count()/num_sen << endl;
 
 	int ub = (int)sentences.size();
 	start = std::chrono::system_clock::now();

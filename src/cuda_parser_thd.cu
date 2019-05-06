@@ -298,16 +298,13 @@ Ptree* parse_sequential(vector<string> sen, unordered_map<string, vector<tuple<s
 	return result;
 }
 
-Ptree* RuleBasedParse(vector<string> sen, unordered_map<string, vector<tuple<string, vector<float>>>> lex,
-			 BG* gr1, UG* gr2, int num_symbol, SymToIdx sti, IdxToSym its, int bg_size, int ug_size,
-		   BinaryGrammar bg, UnaryGrammar ug) {
+Ptree* RuleBasedParse(vector<string> sen, LR* lr, BG* gr1, UG* gr2, int num_symbol,
+	SymToIdx sti, IdxToSym its, int bg_size, int ug_size, int lr_size, WordToIdx wti) {
 
 	int nWords = (int)sen.size();
 	Scores scores = initScores(nWords, num_symbol);
-	Occured occured(nWords, vector<bool>(num_symbol, 0));
-	lexiconScores(scores, sen, nWords, lex, sti, its, occured);
-
 	float* score_arr = moveScoreToCUDA(scores, nWords + 1, nWords + 1, num_symbol);
+	lexiconCUDA(score_arr, sen, nWords, lr, lr_size, sti, its, wti);
 
 	for(int spanlen = 2; spanlen <= nWords; spanlen++) {
 		RuleBasedBinaryRelax(score_arr, nWords, spanlen, gr1, bg_size, num_symbol);
@@ -319,27 +316,30 @@ Ptree* RuleBasedParse(vector<string> sen, unordered_map<string, vector<tuple<str
 	int dim3 = num_symbol;
 
 	Ptree* result = CUDAsearch(score_arr, -1, sen, 0, nWords, gr1, bg_size, gr2, ug_size, dim1,dim2,dim3, sti, its);
-	cout << result->symbol << endl;
+	//cout << result->symbol << endl;
 	cudaFree(score_arr);
 	return result;
 }
 
 void parseAllRuleBased (vector<vector<string>> sen, unordered_map<string, vector<tuple<string, vector<float>>>> lex,
-		 BinaryGrammar bg, UnaryGrammar ug, int num_symbol, SymToIdx sti, IdxToSym its, int num_sen) {
+		 BinaryGrammar bg, UnaryGrammar ug, int num_symbol, SymToIdx sti, IdxToSym its, int num_sen, WordToIdx wti) {
 	int total = 0;
 	int num = 0;
 	int bg_size = bg.size();
 	int ug_size = ug.size();
+	int lr_size = countLex(lex);
 	BG* gr1 = moveBgToCUDA(bg);
 	UG* gr2 = moveUgToCUDA(ug);
+	LR* lr = moveLrToCUDA(lex, wti, sti, lr_size);
 	for (int i = 0; i < num_sen; i++){
 		int len = (int)sen[i].size();
 		num += 1;
 		total += len;
-		RuleBasedParse(sen[i], lex, gr1, gr2, num_symbol, sti, its, bg_size, ug_size, bg, ug);
-		cout << "Finished parsing sentence (CUDA) " << num << endl;
+		RuleBasedParse(sen[i], lr, gr1, gr2, num_symbol, sti, its, bg_size, ug_size, lr_size, wti);
+		//cout << "Finished parsing sentence (CUDA) " << num << endl;
 	}
 	cudaFree(gr1);
 	cudaFree(gr2);
+	cudaFree(lr);
 	std::cout << "avg len: " << total/num_sen << " \n";
 }
